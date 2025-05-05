@@ -2,41 +2,77 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-st.title("Procesador de CSV - Ventas GAP")
+st.set_page_config(page_title="CSV GAP Cleaner", layout="centered")
+st.title("🧼 CSV GAP Cleaner")
+st.write("Subí tu archivo `.csv` de ventas offline y descargá una versión limpia.")
 
-uploaded_file = st.file_uploader("Subí tu archivo CSV", type=["csv"])
+uploaded_file = st.file_uploader("📤 Seleccioná el archivo CSV", type=["csv"])
 
 if uploaded_file is not None:
+    # Leer CSV original
     df = pd.read_csv(uploaded_file, sep=";")
 
-    # Normalizamos los nombres por si hay espacios
+    st.subheader("📄 Vista previa del archivo original")
+    st.dataframe(df.head(10))
+
+    # Asegurarse de que los nombres de columnas estén limpios
     df.columns = df.columns.str.strip()
 
-    # 1. Reformat Fecha
-    df['Fecha'] = pd.to_datetime(df['Fecha'], format="%d/%m/%Y %H:%M:%S", errors='coerce')
-    df['Fecha'] = df['Fecha'].dt.strftime("%m/%d/%Y %H:%M")
+    # ✅ LIMPIEZA ROBUSTA DE FECHA
+    st.write("📅 Fechas originales:")
+    st.write(df['Fecha'].head(5))
 
-    # 2. Eliminar columnas no deseadas
+    try:
+        # 1. Convertir a texto y limpiar variaciones de AM/PM
+        df['Fecha'] = df['Fecha'].astype(str)
+        df['Fecha'] = df['Fecha'].str.replace(r"a\.?\s?m\.?", "", regex=True)
+        df['Fecha'] = df['Fecha'].str.replace(r"p\.?\s?m\.?", "", regex=True)
+        df['Fecha'] = df['Fecha'].str.replace(r"AM|PM|am|pm", "", regex=True)
+
+        # 2. Remover espacios dobles y caracteres invisibles
+        df['Fecha'] = df['Fecha'].str.replace(u"\xa0", " ", regex=False)
+        df['Fecha'] = df['Fecha'].str.replace("\n", " ", regex=False)
+        df['Fecha'] = df['Fecha'].str.replace("  ", " ", regex=False)
+        df['Fecha'] = df['Fecha'].str.strip()
+
+        # 3. Mostrar antes de convertir
+        st.write("🛠️ Después de limpieza pero antes de convertir:")
+        st.write(df['Fecha'].head(5))
+
+        # 4. Convertir a datetime
+        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+        df['Fecha'] = df['Fecha'].dt.strftime("%m/%d/%Y %H:%M")
+
+        st.success("✅ Fechas convertidas correctamente.")
+        st.write("🆕 Fechas convertidas:")
+        st.write(df['Fecha'].head(5))
+
+    except Exception as e:
+        st.error(f"⚠️ Error al convertir fechas: {e}")
+
+    # ✅ ELIMINAR COLUMNAS INNECESARIAS
     columnas_a_eliminar = ['Telefono', 'RUT', 'Descuento']
     columnas_presentes = [col for col in columnas_a_eliminar if col in df.columns]
     df.drop(columns=columnas_presentes, inplace=True)
 
-    # 3. Eliminar filas sin Mail
+    # ✅ FILTRAR FILAS SIN MAIL
     df = df[df['Mail'].notna() & (df['Mail'].astype(str).str.strip() != "")]
 
-    # 4. Eliminar filas con Total negativo
+    # ✅ ELIMINAR FILAS CON TOTAL NEGATIVO
     if 'Total' in df.columns:
         df = df[df['Total'] >= 0]
 
-    # 5. Generar archivo descargable
+    # ✅ GENERAR ARCHIVO PARA DESCARGA
     output = BytesIO()
     df.to_csv(output, index=False, sep=";")
     output.seek(0)
 
-    st.success("Archivo procesado correctamente.")
+    st.subheader("✅ Archivo procesado correctamente")
     st.download_button(
-        label="📥 Descargar archivo limpio",
+        label="📥 Descargar archivo limpio (Offline Gap.csv)",
         data=output,
         file_name="Offline Gap.csv",
         mime="text/csv"
     )
+
+    st.info("Si ves algo incorrecto, revisá el formato de la columna Fecha o los encabezados del archivo original.")
