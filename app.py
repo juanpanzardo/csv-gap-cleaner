@@ -62,9 +62,9 @@ if uploaded_file is not None:
     if 'Total' in df.columns:
         df = df[df['Total'] >= 0]
 
-    # ✅ GENERAR ARCHIVO PARA DESCARGA
+    # ✅ GENERAR ARCHIVO PARA DESCARGA (sin encabezado)
     output = BytesIO()
-    df.to_csv(output, index=False, sep=";")
+    df.to_csv(output, index=False, sep=";", header=False)
     output.seek(0)
 
     st.subheader("✅ Archivo procesado correctamente")
